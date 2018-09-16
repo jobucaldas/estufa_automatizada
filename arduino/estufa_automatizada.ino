@@ -1,11 +1,11 @@
 
 
-//TCC - Mecatrônica 2018      Grupo: Óliver Pincelli Westin/ Marcelo Vinicius Teodoro/ Erik Adriano Romanelli/ 
+//TCC - Etim - Mecatrônica 2018      Grupo: Óliver Pincelli Westin/ Marcelo Vinicius Teodoro/ Erik Adriano Romanelli/ 
 //                                     João Victor Bueno de caldas/ Rafael dos Santos Domingues Costa /                      Estufa Automática 
 
 //***************************************************************************************//*************************************************************************************// 
 
-#include "Limits.h"
+// Bibliotecas
 #include <PCD8544.h>
 #include <Arduino.h>
 #include <Wire.h>
@@ -15,27 +15,122 @@
 #include <DHT_U.h>
 #include <DS3231.h>
 #include <math.h>
+#include <EEPROM.h>
 
-#define DHTPIN A2                             // Pino DHT 11
+// Constantes
+#define DHTPIN A5                             // Pino DHT 11 (sensor de tempera)
 #define DHTTYPE DHT11                         // DHT 11 (Módulo de temperatura)
-#define pino_sinal_analogico A1              //Pino do módulo sensor de umidade
-#define pinopot  A0                         //Pino do sensor LDR de luminosidade
+#define pino_sinal_analogico A1               //Pino do módulo sensor de umidade
+#define pinopot  A3                           //Pino do sensor LDR de luminosidade
+#define piraque 49
 
 Time t;
 
 //CONFIGURACAO DO DISPLAY MICRO LCD
 LCD_SSD1306 lcd;             // para módulo contralado pelo CI SSD1306 OLED
 DHT dht(DHTPIN, DHTTYPE);
-DS3231  rtc(SDA, SCL);      //Para módulo de tempo
+DS3231  rtc(SDA, SCL);       //Para módulo de tempo
 
+  //****************************Variaveis*********************************//
 
-  int valorpot ;                           // Armazena valor lido de 0 até 1023
+  // Valores sensores
+  int valorpot;                            // Armazena valor lido de 0 até 1023
   float luminosidadelcd = 0;               // Valor luminosidade do lcd 
   int luzambiente;
-  int valor_analogico;                    //Valor de umidade lido
-  int botao;                             // Lê o estado do botão
+  int valor_analogico;                     //Valor de umidade lido
+  int botao;                               // Lê o estado do botão
+  int h;
+  int temperature;
 
-  
+  // Valores da string do console
+  int lastPosRefresh = 0;
+  int textPosRefresh = -1;
+  int lastPosDate    = 0;
+  int textPosDate    = -1;
+  int lastPosHour    = 0;
+  int textPosHour    = -1;
+
+  // Valores da string dos dias da semana
+  int lastPosSeg    = 0;
+  int textPosSeg    = -1;
+  int lastPosTer    = 0;
+  int textPosTer    = -1;
+  int lastPosQua    = 0;
+  int textPosQua    = -1;
+  int lastPosQui    = 0;
+  int textPosQui    = -1;
+  int lastPosSex    = 0;
+  int textPosSex    = -1;
+  int lastPosSab    = 0;
+  int textPosSab    = -1;
+  int lastPosDom    = 0;
+  int textPosDom    = -1;
+
+  // Valores de datas e horas
+  int hrClock;
+  int minClock;
+  int segClock;
+  int dayClock;
+  int monthClock;
+  int yearClock;
+  String dowClock;
+  int dowClockInt;
+
+  // Dia da semana atual
+  String dowNow;
+
+  // Hora dos dias da semana
+  int hrSeg;
+  int hrTer;
+  int hrQua;
+  int hrQui;
+  int hrSex;
+  int hrSab;
+  int hrDom;
+
+  // String do texto do console
+  String consoleText;
+
+  // Status do funcionamento da bomba
+  boolean irrigateStatus = false;
+
+  // Strings de funcionamento da bomba em dias da semana
+  String bombSeg;
+  String bombTer;
+  String bombQua;
+  String bombQui;
+  String bombSex;
+  String bombSab;
+  String bombDom;
+
+  // Funcionamento de bombas em int
+  int intBombSeg;
+  int intBombTer;
+  int intBombQua;
+  int intBombQui;
+  int intBombSex;
+  int intBombSab;
+  int intBombDom;
+
+  // Valor no EEPROM
+  int valueSeg;
+  int valueTer;
+  int valueQua;
+  int valueQui;
+  int valueSex;
+  int valueSab;
+  int valueDom;
+
+  // Posição da variavel no eeprom
+  int addrSeg = 0;
+  int addrTer = 1;
+  int addrQua = 2;
+  int addrQui = 3;
+  int addrSex = 4;
+  int addrSab = 5;
+  int addrDom = 6;
+
+//*************************************************************************//*********************************************************************************//
     
 const unsigned char PROGMEM agua [] = {
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -166,339 +261,72 @@ const unsigned char PROGMEM luz [] = {
 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
- 
-void setup() {
+//********************************************************************//************************************************************************//
 
+void SetArduinoUp(){
+  // Inicia porta
   Serial.begin(115200);
-  
+
+  // Abre lcd
   lcd.begin();
-  
+
+  // Inicia porta
   Serial.begin(9600);
-  pinMode(pino_sinal_analogico, INPUT);        //Declarando pinos de entrada e saída
-  pinMode(2, OUTPUT);                         //Sensor fora do solo
-  pinMode (pinopot, INPUT);                  //Porta ligada ao sensor LDR
-  
-  pinMode (22, OUTPUT);                         //Relé lâmpada 1   (Luminosidade)
-  pinMode (23, OUTPUT);                        //Relé lâmpada 2    (Luminosidade)
-  pinMode (52, OUTPUT);                       //Relé Bomba         (Umidade do solo)
-  pinMode (53, OUTPUT);                      //Relé Cooler         (Temperatura)
-  pinMode (51, OUTPUT);                     // Buzer
+
+  // Seta entradas
+  pinMode (pino_sinal_analogico, INPUT);        //Declarando pinos de entrada e saída
+  pinMode (44, OUTPUT);                         //Error 44 -> Sensor fora do solo
+  pinMode (pinopot, INPUT);                    //Porta ligada ao sensor LDR
+
+  // Entradas dos sensores
+  pinMode (piraque, OUTPUT);
+  pinMode (25, OUTPUT);                        //Relé lâmpada 1   (Luminosidade)
+  pinMode (29, OUTPUT);                        //Relé lâmpada 2    (Luminosidade)
+  pinMode (33, OUTPUT);                        //Relé Bomba         (Umidade do solo)
+  pinMode (37, OUTPUT);                        //Relé Cooler         (Temperatura)
+  pinMode (51, OUTPUT);                        //Buzer
  
-  pinMode (7, INPUT_PULLUP);                //Botão (liga display)
+  pinMode (7, INPUT_PULLUP);                   //Botão (liga display)
+
+  // Printa titulo
   Serial.println("TCC - Estufa");
 
   // Inicialização do RTC e DHT
   rtc.begin();
   dht.begin();
 
-  // Ajustes do relógio e calendário
-  //rtc.setTime(11, 53, 40);     // Set the time to 12:00:00 (24hr format)
-  //rtc.setDate(18, 4, 2018);   // Set the date to January 1st, 2014
-
-  //Plantinha Logo TCC  
+  // Plantinha Logo TCC  
   lcd.setCursor(40,1);
   lcd.draw(logo,48,48);
   delay(4000);
   lcd.clear();
-
 }
 
-//****************************************************************************************//************************************************************************************//
-void loop() {
-
-  botao = digitalRead (7);
-  t = rtc.getTime();
-
-if (botao){
-
-   //Calendario ==> Display
-  Serial.println("    ");
-  titulo();
-  lcd.setCursor(0, 2);
-  lcd.draw(calendario,48,48);
-  setFont();
-  Serial.print("  Data: ");
-  Serial.println(rtc.getDateStr());
-  lcd.println(rtc.getDateStr());
-  delay(3000);
-
-  //Horário
-  titulo();
-  lcd.setCursor(0, 2);
-  lcd.draw(relogio,48,48);
-  lcd.setCursor(70,4);
-  lcd.setFontSize(FONT_SIZE_LARGE);
-  lcd.print(t.hour,DEC);
-  lcd.print(":");
-  if(t.min<10){ lcd.print("0"); }
-  lcd.print(t.min, DEC);
-  Serial.print("  Horário: ");
-  Serial.println(rtc.getTimeStr());
-  delay(3000);  
-
-  //****************************************************************************************//************************************************************************************//
-
-  
-//Linha da Luminosidade
-//Luminosidade ==> CMD
-
-  valorpot = analogRead(pinopot);
-
-  luminosidadelcd = map(valorpot, 0, 1023, 0, 255);
-  Serial.print("  Valor lido do LDR : ");
-  Serial.println(valorpot);
-
-  luzambiente = map(valorpot, 0, 1023, 0, 100);
-  Serial.print("  Luminosidade : ");
-  Serial.print(map(valorpot, 0, 1023, 0, 100));
-  Serial.println(" %");
-
-// Display
-
-  luzambiente = map(valorpot, 0, 1023, 0, 100);
-  titulo();
-  lcd.setCursor(0,2);
-  lcd.draw(luz,48,48);
-  lcd.setCursor(45,4);
-  lcd.setFontSize(FONT_SIZE_SMALL);
-  lcd.print(" Luminosidade:");
-  pula();
-  lcd.print(luzambiente);
-  lcd.print("%");
-  delay(3000);
-  
-
-//****************************************************************************************//************************************************************************************//
-
-// Sensor de umidade do solo
-
-  valor_analogico = analogRead(pino_sinal_analogico);           //Le o valor do pino A1 do sensor
-  valor_analogico = map(valor_analogico, 1023, 0, 0, 100);
-
-  //Mostra o valor da porta analogica no serial monitor
-  Serial.print("  Umidade solo: ");
-  Serial.print(valor_analogico);
-  Serial.println("%");
-
-    titulo();
-  lcd.setCursor(0, 2);        //Gota no display
-  lcd.draw(agua,48,48);     
-  setFont();
- 
-  if (valor_analogico > 70 && valor_analogico <= 100)
-  {
-  Serial.println("  Status: Solo umido");
-  
-  lcd.setCursor(78,4);
-  lcd.setFontSize(FONT_SIZE_SMALL);
-  lcd.print("Umido");                            // solo umido
-  pula();
-  lcd.print(valor_analogico);
-  lcd.print("%");
-  delay(3000);
+void SetDOWStrings(){
+  // Seta strings de dia da semana atual
+  if(rtc.getDOWStr(FORMAT_SHORT) == "Mon"){
+    dowNow = "seg";
   }
- 
-  if (valor_analogico > 30 && valor_analogico < 69)
-  {
-    Serial.println("  Status: Umidade moderada");
-  
-  setFont(); 
-  lcd.print("Equilibrado");                                
-  pula();                                           // solo equilibrado
-  lcd.print(valor_analogico);
-  lcd.print("%");
-  delay(3000);
+  else if(rtc.getDOWStr(FORMAT_SHORT) == "Tue"){
+    dowNow = "ter";
   }
-
-  if (valor_analogico >= 15 && valor_analogico < 29)
-  {
-    Serial.println("  Status: Solo seco");
-  
-  setFont();  
-  lcd.print("Solo seco");                                // solo seco
-  pula();
-  lcd.print(valor_analogico);
-  lcd.print("%");
-  delay(3000);
+  else if(rtc.getDOWStr(FORMAT_SHORT) == "Wed"){
+    dowNow = "qua";
   }
-
-  if (valor_analogico >= 0 && valor_analogico < 2)   
-  {
-  lcd.print("Sensor fora");
-  pula();
-  lcd.print("do solo!");
-  digitalWrite (2, HIGH);
-  delay (3000);                                          // sensor fora do solo
-  digitalWrite (2, LOW);
+  else if(rtc.getDOWStr(FORMAT_SHORT) == "Thu"){
+    dowNow = "qui";
   }
-
-
-  //****************************************************************************************//************************************************************************************//
- 
-      
-      //Temperatura
-  
-  int h = dht.readHumidity();            //Valor da umidade relativa do ar
-  int t = dht.readTemperature();         //Valor da temperatura
-  
-  titulo();
-  lcd.setCursor(0, 2);
-  lcd.draw(termometro,48,48);
-  setFont();
-  
-  if (isnan(t) || isnan(h)) 
-  {
-    Serial.println("  Falha ao ler DHT");
-    lcd.print("Falha ao ler");
-    pula();
-    lcd.print("DHT");
-  } 
-  else 
-  {
-    Serial.print("  Umidade do AR: ");
-    Serial.print(h);
-    Serial.println("% ");                                    //Monitor serial
-    Serial.print("  Temperatura: ");
-    Serial.print(t);
-    Serial.print(" °C");
-    Serial.println("          ");
-
-    lcd.print("Temperatura:");
-    pula();
-    lcd.print(t);
-    lcd.print("'C");
+  else if(rtc.getDOWStr(FORMAT_SHORT) == "Fri"){
+    dowNow = "sex";
   }
-  delay(3000); 
-  lcd.clear();
-}
-
-//********************************************************************************//**********************************************************************************************//
-//*******************************************************************************//***********************************************************************************************//
-
-else (botao);{
-
-   /*//Calendario ==> Displa
-  Syerial.println("    ");
-  titulo();
-  lcd.setCursor(0, 2);
-  lcd.draw(calendario,48,48);             
-  setFont();
-  Serial.print("  Data: ");
-  Serial.println(rtc.getDateStr());
-  lcd.println(rtc.getDateStr());
-  delay(3000);
-
-  //Horário
-  titulo();
-  lcd.setCursor(0, 2);
-  lcd.draw(relogio,48,48);                                        Parte ignorada por razões técnicas
-  lcd.setCursor(70,4);
-  lcd.setFontSize(FONT_SIZE_LARGE);
-  lcd.print(t.hour,DEC);
-  lcd.print(":");
-  if(t.min<10){ lcd.print("0"); }
-  lcd.print(t.min, DEC);
-  Serial.print("  Horário: ");
-  Serial.println(rtc.getTimeStr());
-  delay(3000);  */
-
-  //****************************************************************************************************************************************************************************
-
-  
-//Linha da Luminosidade
-//Luminosidade ==> CMD
-
-  valorpot = analogRead(pinopot);
-  luzambiente = map(valorpot, 0, 1023, 0, 100);
-
-// Reação da leitura
-
-  if ((map(valorpot,0,1023, 0, 100))< 40){
-    digitalWrite(20, HIGH);
-}
- valorpot = analogRead(pinopot);
- 
-  if ((map(valorpot,0,1023, 0, 100))< 60){
-    digitalWrite(21, HIGH);
- }
-  else ((map(valorpot,0,1023, 0, 100))< 60);{
-    digitalWrite (21, LOW);
+  else if(rtc.getDOWStr(FORMAT_SHORT) == "Sat"){
+    dowNow = "sab";
   }
-  
-
-//****************************************************************************************************************************************************************************
-
-// Sensor de umidade do solo
-
-   valor_analogico = analogRead(pino_sinal_analogico);           //Le o valor do pino A1 do sensor
-   valor_analogico = map(valor_analogico, 1023, 0, 0, 100);
-   Serial.print(valor_analogico);
-
-if (valor_analogico < 40);{
-
-  while (valor_analogico >= 0 && valor_analogico <= 50){
-
-    digitalWrite (52, HIGH);          // Ativa a irrigação   
-    
-    titulo();
-    lcd.setCursor(0, 2);            //Gota no display
-    lcd.draw(agua,48,48);
-    setFont();
-    lcd.setCursor(51,4);
-    lcd.print("Bomba ligada");
-    delay (3000);
-    digitalWrite (52, LOW);
-  
-    valor_analogico = analogRead(pino_sinal_analogico);           //Le o valor do pino A1 do sensor novamente
-    valor_analogico = map(valor_analogico, 1023, 0, 0, 100);
-
-    if (valor_analogico > 50 && valor_analogico <= 100){          // se o solo estiver umido 
-  
-      irrigacaoConcluida();              //Void Irrigação Concluída
-      lcd.print(valor_analogico); 
-    } 
+  else if(rtc.getDOWStr(FORMAT_SHORT) == "Sun"){
+    dowNow = "dom";
   }
 }
-if (valor_analogico >= 50 && valor_analogico <= 100);{
-  lcd.clear();
-}
-  
-if (valor_analogico >= 0 && valor_analogico < 2)   // sensor fora do solo
-  {
 
-  digitalWrite (2, HIGH);
-  delay (100);                                          
-  digitalWrite (2, LOW);
-  }
-
-
-  //****************************************************************************************************************************************************************************
- 
-      
- /*     //Temperatura
-  
-  int h = dht.readHumidity();            //Valor da umidade relativa do ar
-  int t = dht.readTemperature();         //Valor da temperatura
-  
-   titulo();
-  lcd.setCursor(0, 2);
-  lcd.draw(termometro,48,48);
-  setFont();
-  
-  if (isnan(t) || isnan(h)) 
-  {
-    Serial.println("  Falha ao ler DHT");
-    lcd.print("Falha ao ler");
-    pula();
-    lcd.print("DHT");
-  } 
-  else 
-  {
-   
-  
-}*/
-}
-}
 void titulo(){
   //Mostra o titulo pra quando a tela for limpa
   lcd.clear();
@@ -525,8 +353,7 @@ void pula(){
   lcd.setFontSize(FONT_SIZE_SMALL);
 }
 void irrigacaoConcluida (){
-  //Mostra no display que a 
-  //irrigação foi finalizada
+  // Mostra no display que a irrigação foi finalizada
   titulo();
   lcd.setCursor(0, 2);            
   lcd.draw(agua,48,48);
@@ -543,8 +370,672 @@ void irrigacaoConcluida (){
   pula();
   lcd.print(valor_analogico);
   lcd.print("%");
+  delay(3000);  
+}
+
+void LedTest(){
+  // Testa LEDS
+  digitalWrite (25, HIGH);
+  delay (1000);
+  digitalWrite (25, LOW);
+  delay (1000);
+
+  digitalWrite (29, HIGH);
+  delay (1000);
+  digitalWrite (29, LOW);
+  delay (1000);
+  
+  digitalWrite (33, HIGH);
+  delay (1000);
+  digitalWrite (33, LOW);
+  delay (1000);
+
+  digitalWrite (37, HIGH);
+  delay (1000);
+  digitalWrite (37, LOW);
+  delay (1000);
+}
+
+void SerialReadHour(){
+  // Pega posição da hora
+  textPosHour = consoleText.lastIndexOf("New Hour:", lastPosHour);
+  lastPosHour = textPosHour;
+
+  // Se mandou hora, muda informações no clock interno
+  if(textPosHour != -1){
+    textPosHour = -1;
+
+    // Seta int dos horários
+    hrClock  = consoleText.substring(lastPosHour + 10, lastPosHour + 12).toInt();
+    minClock = consoleText.substring(lastPosHour + 13, lastPosHour + 15).toInt();
+    segClock = consoleText.substring(lastPosHour + 16, lastPosHour + 18).toInt();
+  
+    // Ajustes do relógio
+    rtc.setTime(hrClock, minClock, segClock);
+  }
+}
+
+void DateArduinoShow(){
+  // Escreve data no LCD
+  titulo();
+  lcd.setCursor(0, 2);
+  lcd.draw(calendario,48,48);
+  setFont();
+  lcd.println(rtc.getDateStr());
+  delay(3000);
+}
+
+void HourArduinoShow(){
+  // Escreve horário no LCD
+  titulo();
+  lcd.setCursor(0, 2);
+  lcd.draw(relogio,48,48);
+  lcd.setCursor(70,4);
+  lcd.setFontSize(FONT_SIZE_LARGE);
+  lcd.print(t.hour,DEC);
+  lcd.print(":");
+  if(t.min<10){ lcd.print("0"); }
+  lcd.print(t.min, DEC);
+  delay(3000); 
+}
+
+void LightArduinoShow(){
+  // Escreve luminosidade no LCD
+  
+  luzambiente = map(valorpot, 0, 1023, 0, 100);
+  titulo();
+  lcd.setCursor(0,2);
+  lcd.draw(luz,48,48);
+  lcd.setCursor(45,4);
+  lcd.setFontSize(FONT_SIZE_SMALL);
+  lcd.print(" Luminosidade:");
+  pula();
+  lcd.print(luzambiente);
+  lcd.print("%");
+  delay(3000);
+}
+
+void HumidityArduinoShow(){
+  // Escreve umidade do solo no LCD
+
+  titulo();
+  lcd.setCursor(0, 2);        //Gota no display
+  lcd.draw(agua,48,48);     
+  setFont();
+ 
+  if (valor_analogico > 70 && valor_analogico <= 100)
+  {  
+    lcd.setCursor(78,4);
+    lcd.setFontSize(FONT_SIZE_SMALL);
+    lcd.print("Umido");                            // solo umido
+    pula();
+    lcd.print(valor_analogico);
+    lcd.print("%");
+    delay(3000);
+  }
+ 
+  if (valor_analogico > 30 && valor_analogico < 69)
+  {  
+    setFont(); 
+    lcd.print("Equilibrado");                                
+    pula();                                           // solo equilibrado
+    lcd.print(valor_analogico);
+    lcd.print("%");
+    delay(3000);
+  }
+
+  if (valor_analogico >= 15 && valor_analogico < 29)
+  {
+    setFont();  
+    lcd.print("Solo seco");                                // solo seco
+    pula();
+    lcd.print(valor_analogico);
+    lcd.print("%");
+    delay(3000);
+  }
+
+  if (valor_analogico >= 0 && valor_analogico < 2)   
+  {
+    lcd.print("Sensor fora");
+    pula();
+    lcd.print("do solo!");
+    digitalWrite (piraque, HIGH);
+    delay (3000);                                          // sensor fora do solo
+    digitalWrite (piraque, LOW);
+  }
+
+  // Seta display com icones e texto 
+  titulo();
+  lcd.setCursor(0, 2);        //Gota no display
+  lcd.draw(agua,48,48);     
+  setFont();
+
+  // Variavel de umidade do ar
+  h = dht.readHumidity();            //Valor da umidade relativa do ar
+
+  // Printa valores da variavel
+  lcd.print("Umidade ar: ");
+  pula();
+  lcd.print(h);
+  lcd.print("%");
   delay(3000);
   
 }
+
+void TemperatureArduinoShow(){
+  // Escreve temperatura no LCD
+  
+  titulo();
+  lcd.setCursor(0, 2);
+  lcd.draw(termometro,48,48);
+  setFont();
+
+  // String de temperatura
+  temperature = dht.readTemperature();         //Valor da temperatura
+
+  // Se não for um numero escreve erro
+  if (isnan(temperature)) 
+  {
+    lcd.print("Falha ao ler");
+    pula();
+    lcd.print("DHT");
+  } 
+  else 
+  {
+    lcd.print("Temperatura:");
+    pula();
+    lcd.print(temperature);
+    lcd.print("'C");
+  }
+  delay(3000); 
+  lcd.clear();
+}
+
+void RefreshData(){
+  // Pega posição do refresh
+  textPosRefresh = consoleText.lastIndexOf("Refresh Data", lastPosRefresh);
+  lastPosRefresh = textPosRefresh;
+
+  // Se houve refresh, manda informações
+  if(textPosRefresh != -1){
+    textPosRefresh = -1;
+
+    digitalWrite(44, HIGH);
+    delay(500);
+    digitalWrite(44, LOW);
+    
+    // Informacoes seriais
+    // Data
+    Serial.println("    ");
+    Serial.print("  Data: ");
+    Serial.println(rtc.getDateStr());
+  
+    // Horario
+    Serial.print("  Horario: ");
+    Serial.println(rtc.getTimeStr());
+
+    // Semana
+    Serial.print("  Dia da semana: ");
+    Serial.println(rtc.getDOWStr(FORMAT_SHORT));
+
+    // Luminosidade
+    valorpot = analogRead(pinopot);
+
+    luminosidadelcd = map(valorpot, 0, 1023, 0, 255);
+    Serial.print("  Valor lido do LDR : ");
+    Serial.println(valorpot);
+
+    luzambiente = map(valorpot, 0, 1023, 0, 100);
+    Serial.print("  Luminosidade : ");
+    Serial.print(map(valorpot, 0, 1023, 0, 100));
+    Serial.println("%");
+  
+    // Sensor de umidade do solo
+    valor_analogico = analogRead(pino_sinal_analogico);           //Le o valor do pino A1 do sensor
+    valor_analogico = map(valor_analogico, 1023, 0, 0, 100);
+
+    //Mostra o valor da porta analogica no serial monitor
+    Serial.print("  Umidade solo: ");
+    Serial.print(valor_analogico);
+    Serial.println("%");
+  
+    if (valor_analogico > 70 && valor_analogico <= 100)
+    {
+      Serial.println("  Status: Solo umido");
+    }
+    if (valor_analogico > 30 && valor_analogico < 69)
+    {
+      Serial.println("  Status: Umidade moderada");
+    }
+    if (valor_analogico >= 15 && valor_analogico < 29)
+    {
+      Serial.println("  Status: Solo seco");
+    }
+  
+    // Temperatura
+    h           = dht.readHumidity();            //Valor da umidade relativa do ar
+    temperature = dht.readTemperature();         //Valor da temperatura
+  
+    if (isnan(temperature) || isnan(h)) 
+    {
+      Serial.println("  Falha ao ler DHT");
+    }
+    else 
+    {
+      Serial.print("  Umidade do AR: ");
+      Serial.print(h);
+      Serial.println("% ");                                    //Monitor serial
+      Serial.print("  Temperatura: ");
+      Serial.print(temperature);
+      Serial.print(" °C");
+      Serial.println("          ");
+    }
+  }
+}
+
+void SerialReadDate(){
+  // Pega posição da data
+  textPosDate = consoleText.lastIndexOf("New Date:", lastPosDate);
+  lastPosDate = textPosDate;
+  
+  // Se mandou data, muda informações no clock interno
+  if(textPosDate != -1){
+    textPosDate = -1;
+
+    dayClock   = consoleText.substring(lastPosDate + 10, lastPosDate + 12).toInt();
+    monthClock = consoleText.substring(lastPosDate + 13, lastPosDate + 15).toInt();
+    yearClock  = consoleText.substring(lastPosDate + 16, lastPosDate + 20).toInt();
+    dowClock   = consoleText.substring(lastPosDate + 22, lastPosDate + 25);
+
+    // Deixa dia em int pra colocar no clock
+    if(dowClock.equals("seg")){
+      dowClockInt = 1;
+    }else if(dowClock.equals("ter")){
+      dowClockInt = 2;
+    }else if(dowClock.equals("qua")){
+      dowClockInt = 3;
+    }else if(dowClock.equals("qui")){
+      dowClockInt = 4;
+    }else if(dowClock.equals("sex")){
+      dowClockInt = 5;
+    }else if(dowClock.equals("sab")){
+      dowClockInt = 6;
+    }else if(dowClock.equals("dom")){
+      dowClockInt = 7;
+    }
+  
+    // Ajustes da data
+    rtc.setDate(dayClock, monthClock, yearClock);
+    if((dowClockInt >= 1) || (dowClockInt <=7)){
+      rtc.setDOW(dowClockInt);
+    }
+  }
+}
+
+void HumiditySensor(){
+  // Sensor de umidade do solo
+
+   valor_analogico = analogRead(pino_sinal_analogico);           //Le o valor do pino A1 do sensor
+   valor_analogico = map(valor_analogico, 1023, 0, 0, 100);
+
+   //Seta valores do EEPROM em variaveis
+   valueSeg = EEPROM.read(addrSeg);
+   valueTer = EEPROM.read(addrTer);
+   valueQua = EEPROM.read(addrQua);
+   valueQui = EEPROM.read(addrQui);
+   valueSex = EEPROM.read(addrSex);
+   valueSab = EEPROM.read(addrSab);
+   valueDom = EEPROM.read(addrDom);
+
+
+  if(((dowNow.equals("seg")) &&  (valueSeg == 1)) || ((dowNow.equals("ter")) &&  (valueTer == 1)) || ((dowNow.equals("qua")) &&  (valueQua == 1))
+  || ((dowNow.equals("qui")) &&  (valueQui == 1)) || ((dowNow.equals("sex")) && (valueSex == 1)) || ((dowNow.equals("sab")) &&  (valueSab == 1))
+  || ((dowNow.equals("dom")) &&  (valueDom == 1)))
+  {
+    if (valor_analogico < 40);{
+
+      while (valor_analogico >= 0 && valor_analogico <= 50){
+
+        digitalWrite (29, LOW);
+        digitalWrite (25, LOW);
+        digitalWrite (33, HIGH);          // Ativa a irrigação  
+        digitalWrite (51, HIGH);
+        delay (1000);
+        digitalWrite (51, LOW);
+        
+     
+        titulo();
+        lcd.setCursor(0, 2);            //Gota no display
+        lcd.draw(agua,48,48);
+        setFont();
+        lcd.setCursor(51,4);
+        lcd.print("Bomba ligada");
+        delay (3000);
+        digitalWrite (33, LOW);
+  
+        valor_analogico = analogRead(pino_sinal_analogico);           //Le o valor do pino A1 do sensor novamente
+        valor_analogico = map(valor_analogico, 1023, 0, 0, 100);
+
+        if (valor_analogico > 50 && valor_analogico <= 100){          // se o solo estiver umido 
+  
+          irrigacaoConcluida();              //Void Irrigação Concluída
+          lcd.print(valor_analogico);
+           
+        } 
+      }
+    }
+  }
+
+  if (valor_analogico >= 50 && valor_analogico <= 100);{
+    lcd.clear();
+  }
+  
+  if (valor_analogico >= 0 && valor_analogico < 2)   // sensor fora do solo
+  {
+    digitalWrite (49, HIGH);
+    delay (100);                                          
+    digitalWrite (49, LOW);
+  }
+}
+
+void LightSensor(){
+  //Linha da Luminosidade
+  //Luminosidade ==> CMD
+
+  valorpot = analogRead(pinopot);
+  luzambiente = map(valorpot, 0, 1023, 0, 100);
+  
+
+  // Reação da leitura
+
+  if ((map(valorpot,0,1023, 0, 100)) < 40){
+    digitalWrite(25, HIGH);}
+
+  else if ((map(valorpot,0,1023, 0, 100)) > 40){
+    digitalWrite(25, LOW);}
+  
+  valorpot = analogRead(pinopot);
+ 
+  if ((map(valorpot,0,1023, 0, 100)) < 65){
+    digitalWrite(29, HIGH);
+  }
+  else if ((map(valorpot,0,1023, 0, 100)) > 65){
+    digitalWrite(29, LOW);}
+}
+
+void TemperatureSensor(){
+  //Temperatura
+  
+  h = dht.readHumidity();                //Valor da umidade relativa do ar
+  temperature = dht.readTemperature();   //Valor da temperatura
+  
+  if (temperature >= 25)
+  {
+    digitalWrite (37, HIGH);             // Com temperatura >= 25 °C ==> Liga o Cooler
+  }
+    
+  else
+  {                         
+     digitalWrite (37, LOW);             //Com temperatura < 25°C ==> Desliga o Cooler
+  }
+}
+
+void SerialReadDOW(){  
+    // Pega posição do checkbox
+    textPosSeg = consoleText.lastIndexOf("Seg:", lastPosSeg);
+    lastPosSeg = textPosSeg;
+
+    // Se mandou checkbox, muda informações
+    if(textPosSeg != -1){
+      textPosSeg = -1;
+
+      // Lê valor recebido
+      bombSeg  = consoleText.substring(lastPosSeg + 5, 4);
+      
+      // Coloca valor em int
+      if(bombSeg.equals("true")){
+        intBombSeg = 1;
+      }
+      else if(bombSeg.equals("false")){
+        intBombSeg = 0;
+      }
+
+      // Insere valor em int no eeprom
+      if((bombSeg.equals("true")) || (bombSeg.equals("false"))){
+        EEPROM.update(addrSeg, intBombSeg); 
+      }
+      
+    }
+
+    // Pega posição do checkbox
+    textPosTer = consoleText.lastIndexOf("Ter:", lastPosTer);
+    lastPosTer = textPosTer;
+
+    // Se mandou checkbox, muda informações
+    if(textPosTer != -1){
+      textPosTer = -1;
+
+      bombTer  = consoleText.substring(lastPosTer + 5, 4);
+
+      // Coloca valor em int
+      if(bombTer.equals("true")){
+        intBombTer = 1;
+      }
+      else if(bombTer.equals("false")){
+        intBombTer = 0;
+      }
+
+      // Insere valor em int no eeprom
+      if((bombTer.equals("true")) || (bombTer.equals("false"))){
+        EEPROM.update(addrTer, intBombTer); 
+      }
+      
+    }
+
+    // Pega posição do checkbox
+    textPosQua = consoleText.lastIndexOf("Qua:", lastPosQua);
+    lastPosQua = textPosQua;
+
+    // Se mandou checkbox, muda informações
+    if(textPosQua != -1){
+      textPosQua = -1;
+
+      bombQua  = consoleText.substring(lastPosQua + 5, 4);
+
+      // Coloca valor em int
+      if(bombQua.equals("true")){
+        intBombQua = 1;
+      }
+      else if(bombQua.equals("false")){
+        intBombQua = 0;
+      }
+
+      // Insere valor em int no eeprom
+      if((bombQua.equals("true")) || (bombQua.equals("false"))){
+        EEPROM.update(addrQua, intBombQua); 
+      }
+      
+    }
+
+    // Pega posição do checkbox
+    textPosQui = consoleText.lastIndexOf("Qui:", lastPosQui);
+    lastPosQui = textPosQui;
+
+    // Se mandou checkbox, muda informações
+    if(textPosQui != -1){
+      textPosQui = -1;
+
+      bombQui  = consoleText.substring(lastPosQui + 5, 4);
+
+      // Coloca valor em int
+      if(bombQui.equals("true")){
+        intBombQui = 1;
+      }
+      else if(bombQui.equals("false")){
+        intBombQui = 0;
+      }
+
+      // Insere valor em int no eeprom
+      if((bombQui.equals("true")) || (bombQui.equals("false"))){
+        EEPROM.update(addrQui, intBombQui); 
+      }
+      
+    }
+
+    // Pega posição do checkbox
+    textPosSex = consoleText.lastIndexOf("Sex:", lastPosSex);
+    lastPosSex = textPosSex;
+
+    // Se mandou checkbox, muda informações
+    if(textPosSex != -1){
+      textPosSex = -1;
+
+      bombSex = consoleText.substring(lastPosSex + 5, 4);
+
+      // Coloca valor em int
+      if(bombSex.equals("true")){
+        intBombSex = 1;
+      }
+      else if(bombSex.equals("false")){
+        intBombSex = 0;
+      }
+
+      // Insere valor em int no eeprom
+      if((bombSex.equals("true")) || (bombSex.equals("false"))){
+        EEPROM.update(addrSex, intBombSex); 
+      }
+      
+    }
+
+    // Pega posição do checkbox
+    textPosSab = consoleText.lastIndexOf("Sab:", lastPosSab);
+    lastPosSab = textPosSab;
+
+    // Se mandou checkbox, muda informações
+    if(textPosSab != -1){
+      textPosSab = -1;
+
+      bombSab  = consoleText.substring(lastPosSab + 5, 4);
+
+      // Coloca valor em int
+      if(bombSab.equals("true")){
+        intBombSab = 1;
+      }
+      else if(bombSab.equals("false")){
+        intBombSab = 0;
+      }
+
+      // Insere valor em int no eeprom
+      if((bombSab.equals("true")) || (bombSab.equals("false"))){
+        EEPROM.update(addrSab, intBombSab); 
+      }
+      
+    }
+
+    // Pega posição do checkbox
+    textPosDom = consoleText.lastIndexOf("Dom:", lastPosDom);
+    lastPosDom = textPosDom;
+
+    // Se mandou checkbox, muda informações
+    if(textPosDom != -1){
+      textPosDom = -1;
+
+      bombDom  = consoleText.substring(lastPosDom + 5, 4);
+
+      // Coloca valor em int
+      if(bombDom.equals("true")){
+        intBombDom = 1;
+      }
+      else if(bombDom.equals("false")){
+        intBombDom = 0;
+      }
+
+      // Insere valor em int no eeprom
+      if((bombDom.equals("true")) || (bombDom.equals("false"))){
+        EEPROM.update(addrDom, intBombDom); 
+      }
+      
+    }
+
+}
+
+void SerialReadIrrigationTime(){
+  
+}
+ 
+void setup() {
+
+  SetArduinoUp();
+
+  SetDOWStrings();
+
+  /* Teste de leds
+  LedTest();
+  */
+}
+
+//****************************************************************************************//************************************************************************************//
+
+void loop() {
+
+  botao = digitalRead (7);
+  t = rtc.getTime();
+
+  if (botao){
+
+    // Mostra data no lcd
+    DateArduinoShow();
+
+    // Mostra hora no lcd
+    HourArduinoShow(); 
+
+    // Mostra luminosidade no lcd
+    LightArduinoShow();
+
+    // Mostra umidade no lcd
+    HumidityArduinoShow();
+    
+    // Mostra temperatura no lcd
+    TemperatureArduinoShow();
+  
+  }
+
+//********************************************************************************//**********************************************************************************************//
+//*******************************************************************************//***********************************************************************************************//
+
+  else (botao);{
+
+    // Ler sensor de luminosidade
+    LightSensor();
+
+    // Ler sensor de umidade
+    HumiditySensor();
+
+    // Ler sensor de temperatura    
+    TemperatureSensor();
+
+//**********************************************************************************//**********************************************************************************************//
+
+    // Lê console
+    consoleText = Serial.readString();
+
+    // Escreve no serial
+    RefreshData();
+
+    // Lê informações de data
+    SerialReadDate();
+
+    // Lê informações de hora
+    SerialReadHour();
+
+    // Lê informações do dia da semana
+    SerialReadDOW();
+
+    // Lê informações de horario de irrigação
+    SerialReadIrrigationTime();
+  }
+}
+
+//****************************************************************************************************************************************************************************
 
 
