@@ -22,7 +22,6 @@
 #define DHTTYPE DHT11                         // DHT 11 (Módulo de temperatura)
 #define pino_sinal_analogico A1               //Pino do módulo sensor de umidade
 #define pinopot  A3                           //Pino do sensor LDR de luminosidade
-#define piraque 49
 
 Time t;
 
@@ -279,7 +278,7 @@ void SetArduinoUp(){
   pinMode (pinopot, INPUT);                    //Porta ligada ao sensor LDR
 
   // Entradas dos sensores
-  pinMode (piraque, OUTPUT);
+  pinMode (49, OUTPUT);
   pinMode (25, OUTPUT);                        //Relé lâmpada 1   (Luminosidade)
   pinMode (29, OUTPUT);                        //Relé lâmpada 2    (Luminosidade)
   pinMode (33, OUTPUT);                        //Relé Bomba         (Umidade do solo)
@@ -499,9 +498,9 @@ void HumidityArduinoShow(){
     lcd.print("Sensor fora");
     pula();
     lcd.print("do solo!");
-    digitalWrite (piraque, HIGH);
+    digitalWrite (49, HIGH);
     delay (3000);                                          // sensor fora do solo
-    digitalWrite (piraque, LOW);
+    digitalWrite (49, LOW);
   }
 
   // Seta display com icones e texto 
@@ -630,6 +629,29 @@ void RefreshData(){
       Serial.print(" °C");
       Serial.println("          ");
     }
+
+    //***********************DOW**************************//
+
+    Serial.print("Seg DOW: ");
+    Serial.println(valueSeg);
+
+    Serial.print("Ter DOW: ");
+    Serial.println(valueTer);
+
+    Serial.print("Qua DOW: ");
+    Serial.println(valueQua);
+
+    Serial.print("Qui DOW: ");
+    Serial.println(valueQui);
+
+    Serial.print("Sex DOW: ");
+    Serial.println(valueSex);
+
+    Serial.print("Sab DOW: ");
+    Serial.println(valueSab);
+
+    Serial.print("Dom DOW: ");
+    Serial.println(valueDom);
   }
 }
 
@@ -690,7 +712,7 @@ void HumiditySensor(){
 
   if(((dowNow.equals("seg")) &&  (valueSeg == 1)) || ((dowNow.equals("ter")) &&  (valueTer == 1)) || ((dowNow.equals("qua")) &&  (valueQua == 1))
   || ((dowNow.equals("qui")) &&  (valueQui == 1)) || ((dowNow.equals("sex")) && (valueSex == 1)) || ((dowNow.equals("sab")) &&  (valueSab == 1))
-  || ((dowNow.equals("dom")) &&  (valueDom == 1)))
+  || ((dowNow.equals("dom")) &&  (valueDom == 1)) || true)
   {
     if (valor_analogico < 40);{
 
@@ -744,12 +766,13 @@ void LightSensor(){
 
   valorpot = analogRead(pinopot);
   luzambiente = map(valorpot, 0, 1023, 0, 100);
-  
 
   // Reação da leitura
 
   if ((map(valorpot,0,1023, 0, 100)) < 40){
-    digitalWrite(25, HIGH);}
+    if(digitalRead(25))
+      digitalWrite(25, HIGH);    
+  }
 
   else if ((map(valorpot,0,1023, 0, 100)) > 40){
     digitalWrite(25, LOW);}
@@ -757,8 +780,10 @@ void LightSensor(){
   valorpot = analogRead(pinopot);
  
   if ((map(valorpot,0,1023, 0, 100)) < 65){
-    digitalWrite(29, HIGH);
+    if(digitalRead(29))
+      digitalWrite(29, HIGH);    
   }
+  
   else if ((map(valorpot,0,1023, 0, 100)) > 65){
     digitalWrite(29, LOW);}
 }
@@ -1037,5 +1062,3 @@ void loop() {
 }
 
 //****************************************************************************************************************************************************************************
-
-
