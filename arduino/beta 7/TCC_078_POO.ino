@@ -770,8 +770,10 @@ void LightSensor(){
   // Reação da leitura
 
   if ((map(valorpot,0,1023, 0, 100)) < 40){
-    if(digitalRead(25))
-      digitalWrite(25, HIGH);    
+    if(digitalRead(29) == HIGH)
+      digitalWrite(29, LOW);
+    
+    digitalWrite(25, HIGH);    
   }
 
   else if ((map(valorpot,0,1023, 0, 100)) > 40){
@@ -780,8 +782,10 @@ void LightSensor(){
   valorpot = analogRead(pinopot);
  
   if ((map(valorpot,0,1023, 0, 100)) < 65){
-    if(digitalRead(29))
-      digitalWrite(29, HIGH);    
+    if(digitalRead(25) != HIGH)
+      digitalWrite(29, HIGH);  
+    else
+      digitalWrite(25, LOW);  
   }
   
   else if ((map(valorpot,0,1023, 0, 100)) > 65){
