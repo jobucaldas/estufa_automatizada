@@ -1,6 +1,5 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
-#include "serialthreading.h"
 #include "configform.h"
 
 #include <QWidget>
@@ -8,8 +7,8 @@
 #include <QSerialPortInfo>
 #include <QDebug>
 #include <QMessageBox>
-#include <QThread>
 #include <QObject>
+#include <QThread>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {      
@@ -27,18 +26,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 
     //**************Connections with config window********************//
 
-    ConfigForm* configForm = new(ConfigForm);
+    ConfigForm configForm;
 
     // Connect time with this thread
-    connect(configForm, SIGNAL(sendDateTime(QString, QString)),
+    connect(&configForm, SIGNAL(sendDateTime(QString, QString)),
     this, SLOT(onSentDateTime(QString, QString)));
 
     // Connect dow time with this thread
-    connect(configForm, SIGNAL(sendDowTime(QString[], QString[])),
+    connect(&configForm, SIGNAL(sendDowTime(QString[], QString[])),
     this, SLOT(onSentDowTime(QString[], QString[])));
 
     // Connect dow checkboxes with this thread
-    connect(configForm, SIGNAL(sendDowBool(QString[])),
+    connect(&configForm, SIGNAL(sendDowBool(QString[])),
     this, SLOT(onSentDowBool(QString[])));
 }
 
